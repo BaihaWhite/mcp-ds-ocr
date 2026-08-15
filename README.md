@@ -8,9 +8,8 @@
 | --- | --- |
 | `plugin/host.js` | Host 半：配置状态、RPC（get/set-config、list-models、test-config）、`ocr_recognize` 工具（curl 双协议适配、坐标归一化、区域重读合并） |
 | `plugin/client.js` | Client 半：设置 → 插件 的「OCR 视觉识别」可折叠配置卡片 |
-| `tools/mock-ocr-server.py` | OpenAI + Anthropic 兼容 mock（端口 18923：`/models`、`/chat/completions`、`/v1/models`、`/v1/messages`） |
 | `test-400x300.png` | 400×300 测试图片 |
-| `.dsh-ocr/config.json` | 配置持久化文件（工作区根目录，git 已忽略，含 API Key 不入库） |
+| `.dsh-ocr/config.json` | 配置持久化文件（工作区根目录，git 已忽略，含 API Key 不入库；**首次保存时自动创建**） |
 
 ## 配置项
 
@@ -51,6 +50,14 @@
 - 客户端：`slots.inject('settings.plugin.item', …)` 注册卡片（list 协议，`id:'dsh-ocr'`，order 95）；主题样式用 `--dsw-alias-*` CSS 变量。
 - 参考案例：DSH 官方 `dsh-client-ui-settings-models`（ModelListEditor 的「获取模型列表」模式）与 [Anthropic Models API](https://platform.claude.com/docs/en/api/models/list)、[Anthropic Messages API](https://platform.claude.com/docs/en/api/messages)。
 
+## 配置缺失（全新安装）时的行为
+
+克隆仓库后**没有** `.dsh-ocr/config.json`（git 已忽略该文件）——这不会导致安装或运行报错：
+
+- 插件正常加载，配置卡片显示「未配置」；
+- 调用 `ocr_recognize` 返回可读指引：`OCR 未配置：请到「设置 → 插件 → OCR 视觉识别」填写 API URL、API Key 与 Model Name`；
+- 在卡片填写并保存后，配置先入内存；**首次调用 OCR 工具时**插件自动发现会话工作区、创建 `.dsh-ocr/` 目录（shell `mkdir -p`）并补写配置文件，此后重启/更新插件配置依然生效（v4 修复）。
+
 ## 限制
 
 - 动态插件配置随会话进程生命周期；工作区配置文件使其跨插件重启/更新生效，但换工作区需重新配置。
@@ -58,19 +65,11 @@
 - 若响应非 2xx / 非 JSON / 协议字段缺失，返回可读错误；apikey 全程脱敏、不落日志。
 - 移植为 dsh-web-ui 正式插件（侧边栏入口 + 全局持久化）时：把 `plugin/host.js` 的识别逻辑迁到 Host 包、`plugin/client.js` 的卡片迁到设置项即可。
 
-## 端到端测试（本地 mock）
+## 测试记录（2026-08，验证后 mock 已删除）
 
-```bash
-python3 tools/mock-ocr-server.py &          # 127.0.0.1:18923
-# .dsh-ocr/config.json 指向 http://127.0.0.1:18923
-# 调用 ocr_recognize(image_path='test-400x300.png')
-# 期望：首轮 "HELL0 4?"(conf 0.42) → 重读 → "HELLO 42"(conf 0.97, retried)
-# box [40,30,200,150] @400x300 → box_pct [10,10,50,50]，description "左上(10%, 10%) → 右下(50%, 50%)"
-```
-
-✅ 实测通过（ocr-1/pkg-3，2026-08）：
+此前用本地 mock（OpenAI + Anthropic 兼容，端口 18923）完成端到端验证后已删除：
 
 - OpenAI 格式：`mock-ocr-v1`，2 次调用，`HELLO 42`(97%，重读后确认) + `精确文本`(95%)，坐标 `[10,10,50,50]`。
 - Anthropic 格式：`claude-mock-1`（apiFormat 切 anthropic 后走 `/v1/messages`，x-api-key/anthropic-version 头正常），同样 2 次调用、重读合并正常。
-- `GET /models` 与 `GET /v1/models` 返回模型列表（mock 各 3/2 个），供卡片「获取模型列表 / 测试连接」使用。
-- 错误路径返回可读中文报错。
+- `GET /models` 与 `GET /v1/models` 返回模型列表，供卡片「获取模型列表 / 测试连接」使用。
+- 错误路径返回可读中文报错；**无配置文件时返回「未配置」指引而非崩溃**（v4 验证）。

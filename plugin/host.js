@@ -173,23 +173,52 @@ return {
       }
       return false
     }
-    async function persistConfig() {
-      if (!configPathFound) return false
+    // 确保父目录存在（fs 无 mkdir，用 shell 幂等创建）
+    async function ensureDir(dir) {
+      if (!dir) return
       try {
-        const target = await ctx.fs.resolve(configPathFound)
-        await ctx.fs.writeText(target, JSON.stringify(config, null, 2))
-        return true
+        const spec = ctx.shell.resolve({
+          command: `mkdir -p '${dir.replace(/'/g, '')}'`,
+          workdir: sessionRoot || policyRoot || '/tmp',
+          timeoutMs: 10000,
+        })
+        await ctx.shell.run(spec)
       } catch (e) {
-        console.log(`[dsh-ocr] config file write failed (${configPathFound}): ${msg(e)}`)
-        return false
+        console.log(`[dsh-ocr] mkdir failed (${dir}): ${msg(e)}`)
       }
+    }
+    // 写配置文件：已发现路径直接写；否则（首次配置）在 exec 提供的工作区根下建目录再写
+    async function persistConfig(exec) {
+      const targets = []
+      if (configPathFound) {
+        targets.push(configPathFound)
+      } else if (exec) {
+        for (const root of discoverRoots(exec)) {
+          targets.push(root === '.' ? '.dsh-ocr/config.json' : `${root}/.dsh-ocr/config.json`)
+        }
+      }
+      for (const p of targets) {
+        try {
+          const m = p.match(/^(.*)\/\.dsh-ocr\/config\.json$/)
+          const root = m ? m[1] : '.'
+          await ensureDir(root === '.' ? '.dsh-ocr' : `${root}/.dsh-ocr`)
+          const target = await ctx.fs.resolve(p)
+          await ctx.fs.writeText(target, JSON.stringify(config, null, 2))
+          configPathFound = p
+          if (root && root !== '.') sessionRoot = root
+          return true
+        } catch (e) {
+          console.log(`[dsh-ocr] config file write failed (${p}): ${msg(e)}`)
+        }
+      }
+      return false
     }
     async function ensureConfig(exec) {
       if (!configLoaded || !sessionRoot) {
         if (await loadConfigFile(exec)) configLoaded = true
       }
-      if (pendingPersist && configPathFound) {
-        if (await persistConfig()) pendingPersist = false
+      if (pendingPersist) {
+        if (await persistConfig(exec)) pendingPersist = false
       }
       return config
     }
