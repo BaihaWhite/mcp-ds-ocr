@@ -1,0 +1,24 @@
+{
+  "name": "dsh-ocr",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "OCR via OpenAI/Anthropic vision APIs for dsh: ocr_recognize tool (percent coords + two-diagonal-point boxes, auto region re-read on low confidence), a collapsible settings card in Settings → Plugins (API format / URL / Key / Model, fetch model list, test connection). Hot-pluggable — mounted via ~/.dsh/profiles/web/cordis.patch.yml + a profile node_modules symlink, no dsh source changes.",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ],
+      "platform": "web"
+    }
+  }
+}

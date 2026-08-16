@@ -1,0 +1,13 @@
+# dsh-ocr bundle patch: inserts the dual-face plugin row into the web
+# profile roster. Applied as a profile bundle layer (the `dsh.bundle.patch`
+# manifest field) over dsh-base; the plugin store's install button adds this
+# package to `dsh.profile.bundles` after `pnpm add github:BaihaWhite/mcp-ds-ocr`.
+#
+# The row is a bare plugin by package name: the node half (exports ".") runs
+# in the host process (ocr_recognize tool, /api/dsh-ocr routes, dsh-settings
+# persistence), and the `dsh.client` declaration in package.json makes the
+# browser half (exports "./client") load in the web GUI (Settings → Plugins).
+- insert:
+    - id: dsh-ocr
+      name: 'dsh-ocr'
+      config: {}
